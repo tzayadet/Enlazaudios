@@ -78,25 +78,21 @@ def main():
     for a in archivos:
         print(f"  - {a.relative_to(args.carpeta)}")
 
-    # Normaliza cada entrada al mismo formato y las concatena con el filtro concat,
-    # así funciona aunque los archivos tengan distinto formato, canales o frecuencia.
-    partes = []
-    for i in range(len(archivos)):
-        partes.append(
-            f"[{i}:a]aformat=sample_rates={args.frecuencia}:channel_layouts={args.canales}[a{i}]"
-        )
-    etiquetas = "".join(f"[a{i}]" for i in range(len(archivos)))
-    partes.append(f"{etiquetas}concat=n={len(archivos)}:v=0:a=1[out]")
-    filtro = ";\n".join(partes)
-
+    # Se pasa la lista de archivos a ffmpeg mediante un fichero de texto (concat demuxer),
+    # así no hay límite de archivos (Windows limita la longitud de la línea de comandos).
+    # El filtro aformat unifica frecuencia y canales de todo el resultado.
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write(filtro)
+        for a in archivos:
+            ruta = a.resolve().as_posix().replace("'", "'\\''")
+            f.write(f"file '{ruta}'\n")
         script_filtro = f.name
 
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats"]
-    for a in archivos:
-        cmd += ["-i", str(a)]
-    cmd += ["-filter_complex_script", script_filtro, "-map", "[out]", "-vn", str(salida)]
+    cmd = [
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats",
+        "-f", "concat", "-safe", "0", "-i", script_filtro,
+        "-vn", "-af", f"aformat=sample_rates={args.frecuencia}:channel_layouts={args.canales}",
+        str(salida),
+    ]
 
     try:
         subprocess.run(cmd, check=True)

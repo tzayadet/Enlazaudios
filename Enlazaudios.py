@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Une todos los audios de una carpeta en un único archivo, uno tras otro,
-del más antiguo al más reciente según su fecha de creación.
+del más antiguo al más reciente según su fecha de creación,
+incluyendo las subcarpetas (todo se une en un único archivo).
 
 Requiere ffmpeg instalado y accesible en el PATH.
 
@@ -8,7 +9,8 @@ Uso:
     python Enlazaudios.py            (abre un selector para elegir la carpeta)
     python Enlazaudios.py CARPETA
     python Enlazaudios.py CARPETA -o resultado.mp3
-    python Enlazaudios.py CARPETA -o resultado.wav --recursivo
+    python Enlazaudios.py CARPETA -o resultado.wav
+    python Enlazaudios.py CARPETA --sin-subcarpetas
 """
 import argparse
 import re
@@ -38,7 +40,8 @@ def main():
                     help="Carpeta con los audios (si se omite, se abre un selector)")
     ap.add_argument("-o", "--salida", type=Path, default=Path("unido.mp3"),
                     help="Archivo de salida (el formato se deduce de la extensión)")
-    ap.add_argument("-r", "--recursivo", action="store_true", help="Incluir subcarpetas")
+    ap.add_argument("--sin-subcarpetas", action="store_true",
+                    help="Ignorar las subcarpetas (por defecto se incluyen)")
     ap.add_argument("--frecuencia", type=int, default=44100, help="Frecuencia de muestreo (Hz)")
     ap.add_argument("--canales", choices=["mono", "stereo"], default="stereo")
     args = ap.parse_args()
@@ -61,7 +64,7 @@ def main():
         sys.exit(f"Error: '{args.carpeta}' no es una carpeta.")
 
     salida = args.salida.resolve()
-    patron = args.carpeta.rglob("*") if args.recursivo else args.carpeta.glob("*")
+    patron = args.carpeta.glob("*") if args.sin_subcarpetas else args.carpeta.rglob("*")
     archivos = sorted(
         (p for p in patron
          if p.is_file() and p.suffix.lower() in EXTENSIONES and p.resolve() != salida),
@@ -73,7 +76,7 @@ def main():
 
     print(f"Uniendo {len(archivos)} archivos:")
     for a in archivos:
-        print(f"  - {a.name}")
+        print(f"  - {a.relative_to(args.carpeta)}")
 
     # Normaliza cada entrada al mismo formato y las concatena con el filtro concat,
     # así funciona aunque los archivos tengan distinto formato, canales o frecuencia.
